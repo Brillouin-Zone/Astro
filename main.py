@@ -20,6 +20,7 @@ from astropy.wcs import WCS
 from astropy.coordinates import SkyCoord
 import statistics
 import random
+import scipy.constants as const
 
 import time
 from datetime import timedelta
@@ -91,7 +92,7 @@ COLS.append(pyfits.Column(name='vacuum_wavelength', unit='Angstrom', format='E',
 
 FigNr = 0
 for i in range(0, len(RA)):		# loop through the number of target galaxies
-	if (REDSHIFT[i] >= 3) and (REDSHIFT[i] <= 4): # select galaxies according to redshift interval after looking at data manually; selects 171 targets
+	if (REDSHIFT[i] >= 2) and (REDSHIFT[i] <= 5): # select galaxies according to redshift interval;
 		for q in range(len(wavelength)):
 			data_slice = data[q, :, :]  # LAYER for this wavelength
 			data_slice_err = data_err[q, :, :]  # VARIANCE
@@ -134,7 +135,6 @@ for i in range(0, len(RA)):		# loop through the number of target galaxies
 		plt.legend(loc=1)
 		plt.savefig('plots/ALL_PART1/Lya_rest_spectrum_target_%s.pdf' % (target_nr))
 		plt.clf()
-		# TODO: maybe save without 'plots/' when running on linux server
 
 		FigNr += 1
 
@@ -219,65 +219,72 @@ for i in range(select_targets):
 	columns.append(pyfits.Column(name='flux_He-II_%s' % (target_nr), unit='10**-20 erg s-1 cm-2 A-1', format='E', array=flux_HeII[i]))
 	columns.append(pyfits.Column(name='noise_He-II_%s' % (target_nr), unit='10**-20 erg s-1 cm-2 A-1', format='E', array=noise_HeII[i]))
 
-	# Lya GAUSSIAN FIT:
-	mean_Lya = sum(rest_wavelen_Lya[i] * flux_Lya[i]) / len(flux_Lya[i])	
-	sigma_Lya = np.sqrt(sum(flux_Lya[i] * (rest_wavelen_Lya[i] - mean_Lya) ** 2) / sum(flux_Lya[i]))
+	# GAUSSIAN FIT:
 	def Gauss(x, a, x0, sigma):
 		return a *(1/(sigma * (np.sqrt(2*np.pi)))) * np.exp(-(x - x0) ** 2 / (2 * sigma ** 2))
-	popt, pcov = curve_fit(Gauss, rest_wavelen_Lya[i], flux_Lya[i], p0=[max(flux_Lya[i]), mean_Lya, sigma_Lya], maxfev=1000000000)
-	perr_gauss = np.sqrt(np.diag(pcov))
-	residual_Lya[i] = flux_Lya[i] - (Gauss(rest_wavelen_Lya[i], *popt))
-
-	# plt.figure(figNr)
-	figure = plt.figure(figNr)
-	frame1 = figure.add_axes((0.1, 0.3, 0.8, 0.6))
-	plt.plot(rest_wavelen_Lya[i], Gauss(rest_wavelen_Lya[i], *popt), 'r-', label='fit')
-	plt.step(rest_wavelen_Lya[i], flux_Lya[i], 'b', label='flux')
-	plt.step(rest_wavelen_Lya[i], noise_Lya[i], 'k', label='noise')
-	frame1.legend(loc='best')
-	plt.grid(True)
-	plt.axvline(x=Ly_alpha_rest, color='c')
-	frame2 = figure.add_axes((0.1, 0.1, 0.8, 0.2))
-	plt.plot(rest_wavelen_Lya[i], residual_Lya[i], '.g', label='residuals')
-	frame2.legend(loc='best')
-	plt.xlabel(r'wavelength in rest-frame $[\AA]$')
-	plt.ylabel(r'total flux density $10^{-20} \frac{erg}{s\cdot cm^2 A}$')
-	plt.suptitle('Ly-$\u03B1$ rest-peak of target %s at z = %s' % (target_nr, REDSHIFT_select[i]))
-	plt.grid(True)
-	frame1.get_shared_x_axes().join(frame1, frame2) # plot and residual-plot share x-axis
-	frame1.set_xticklabels([])  # Remove x-tic labels for the first frame
-	plt.savefig('plots/ALL_PART2_GAUSSIAN/Lya_Gauss_target_%s.pdf' % (target_nr))
-	plt.clf()
-
-	figNr += 1
 
 	# He-II GAUSSIAN FIT:
-	mean_HeII = sum(rest_wavelen_HeII[i] * flux_HeII[i]) / len(flux_HeII[i])
+	mean_HeII = sum(rest_wavelen_HeII[i] * flux_HeII[i]) / sum(flux_HeII[i]) # np.mean(flux_HeII[i])
+	# print("mean_HeII: ", mean_HeII)
 	sigma_HeII = np.sqrt(sum(flux_HeII[i] * (rest_wavelen_HeII[i] - mean_HeII) ** 2) / sum(flux_HeII[i]))
 	popt, pcov = curve_fit(Gauss, rest_wavelen_HeII[i], flux_HeII[i], p0=[max(flux_HeII[i]), mean_HeII, sigma_HeII], maxfev=1000000000)
 	perr_gauss = np.sqrt(np.diag(pcov))
 	residual_HeII[i] = flux_HeII[i] - (Gauss(rest_wavelen_HeII[i], *popt))
+	Delta_v_HeII = const.speed_of_light * (mean_HeII - HeII) / (1000 * HeII) # velocity offset ([km/s]) between HeII = 164.0nm and detected maximum; c in m/s
+	# print("Delta_v_HeII: ", Delta_v_HeII)
 
-	# plt.figure(figNr)
-	figure = plt.figure(figNr)
-	frame1 = figure.add_axes((0.1, 0.3, 0.8, 0.6))
-	plt.plot(rest_wavelen_HeII[i], Gauss(rest_wavelen_HeII[i], *popt), 'r-', label='fit')
-	plt.step(rest_wavelen_HeII[i], flux_HeII[i], 'b', label='flux')
-	plt.step(rest_wavelen_HeII[i], noise_HeII[i], 'k', label='noise')
-	frame1.legend(loc='best')
-	plt.grid(True)
-	plt.axvline(x=HeII, color='c')
-	frame2 = figure.add_axes((0.1, 0.1, 0.8, 0.2))
-	plt.plot(rest_wavelen_HeII[i], residual_HeII[i], '.g', label='residuals')
-	frame2.legend(loc='best')
-	plt.xlabel(r'wavelength in rest-frame $[\AA]$')
-	plt.ylabel(r'total flux density $10^{-20} \frac{erg}{s\cdot cm^2 A}$')
-	plt.suptitle('He-II rest-peak of target %s at z = %s' % (target_nr, REDSHIFT_select[i]))
-	plt.grid(True)
-	frame1.get_shared_x_axes().join(frame1, frame2)
-	frame1.set_xticklabels([])
-	plt.savefig('plots/ALL_PART2_GAUSSIAN/HeII_Gauss_target_%s.pdf' % (target_nr))
-	plt.clf()
+	if ((0 <= np.mean(flux_HeII[i])) and (Delta_v_HeII >= -800) and (Delta_v_HeII <= 500)):  # TODO: MAY CHANGE BOUDNARIES
+		# plt.figure(figNr)
+		figure = plt.figure(figNr)
+		frame1 = figure.add_axes((0.1, 0.3, 0.8, 0.6))
+		plt.plot(rest_wavelen_HeII[i], Gauss(rest_wavelen_HeII[i], *popt), 'r-', label='fit')
+		plt.step(rest_wavelen_HeII[i], flux_HeII[i], 'b', label='flux')
+		plt.step(rest_wavelen_HeII[i], noise_HeII[i], 'k', label='noise')
+		frame1.legend(loc='best')
+		plt.grid(True)
+		plt.axvline(x=HeII, color='c')
+		frame2 = figure.add_axes((0.1, 0.1, 0.8, 0.2))
+		plt.plot(rest_wavelen_HeII[i], residual_HeII[i], '.g', label='residuals')
+		frame2.legend(loc='best')
+		plt.xlabel(r'wavelength in rest-frame $[\AA]$')
+		plt.ylabel(r'total flux density $10^{-20} \frac{erg}{s\cdot cm^2 A}$')
+		plt.suptitle('He-II rest-peak of target %s at z = %s' % (target_nr, REDSHIFT_select[i]))
+		plt.grid(True)
+		frame1.get_shared_x_axes().join(frame1, frame2)
+		frame1.set_xticklabels([])
+		plt.savefig('plots/ALL_PART2_GAUSSIAN/HeII_Gauss_target_%s.pdf' % (target_nr))
+		plt.clf()
+
+	figNr += 1
+
+	# Lya GAUSSIAN FIT:
+	mean_Lya = np.mean(flux_Lya[i]) # sum(rest_wavelen_Lya[i] * flux_Lya[i]) / sum(flux_Lya[i])
+	sigma_Lya = np.sqrt(sum(flux_Lya[i] * (rest_wavelen_Lya[i] - mean_Lya) ** 2) / sum(flux_Lya[i]))
+	popt, pcov = curve_fit(Gauss, rest_wavelen_Lya[i], flux_Lya[i], p0=[max(flux_Lya[i]), mean_Lya, sigma_Lya], maxfev=1000000000)
+	perr_gauss = np.sqrt(np.diag(pcov))
+	residual_Lya[i] = flux_Lya[i] - (Gauss(rest_wavelen_Lya[i], *popt))
+
+	if (0 <= np.mean(flux_HeII[i])): # only look at galaxies that have a HeII peak
+		# plt.figure(figNr)
+		figure = plt.figure(figNr)
+		frame1 = figure.add_axes((0.1, 0.3, 0.8, 0.6))
+		plt.plot(rest_wavelen_Lya[i], Gauss(rest_wavelen_Lya[i], *popt), 'r-', label='fit')
+		plt.step(rest_wavelen_Lya[i], flux_Lya[i], 'b', label='flux')
+		plt.step(rest_wavelen_Lya[i], noise_Lya[i], 'k', label='noise')
+		frame1.legend(loc='best')
+		plt.grid(True)
+		plt.axvline(x=Ly_alpha_rest, color='c')
+		frame2 = figure.add_axes((0.1, 0.1, 0.8, 0.2))
+		plt.plot(rest_wavelen_Lya[i], residual_Lya[i], '.g', label='residuals')
+		frame2.legend(loc='best')
+		plt.xlabel(r'wavelength in rest-frame $[\AA]$')
+		plt.ylabel(r'total flux density $10^{-20} \frac{erg}{s\cdot cm^2 A}$')
+		plt.suptitle('Ly-$\u03B1$ rest-peak of target %s at z = %s' % (target_nr, REDSHIFT_select[i]))
+		plt.grid(True)
+		frame1.get_shared_x_axes().join(frame1, frame2) # plot and residual-plot share x-axis
+		frame1.set_xticklabels([])  # Remove x-tic labels for the first frame
+		plt.savefig('plots/ALL_PART2_GAUSSIAN/Lya_Gauss_target_%s.pdf' % (target_nr))
+		plt.clf()
 
 	figNr += 1
 
