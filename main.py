@@ -214,15 +214,14 @@ for i in range(select_targets):
 	noise_HeII[i] = np.array(flux_dens_err[i])[HeII_indices[i]]
 	rest_wavelen_HeII[i] = np.array(rest_vac_wavelen[i])[HeII_indices[i]]
 
-	# TODO: if np.mean(noise_HeII[i]) < np.mean(flux_HeII[i]):  # select galaxies according to their noise?
 	# SAVE THE HeII-PEAK INTO A FITS TABLE
 	columns.append(pyfits.Column(name='rest_wavelen_He-II_%s' % (target_nr), unit='Angstrom', format='E', array=rest_wavelen_HeII[i]))
 	columns.append(pyfits.Column(name='flux_He-II_%s' % (target_nr), unit='10**-20 erg s-1 cm-2 A-1', format='E', array=flux_HeII[i]))
 	columns.append(pyfits.Column(name='noise_He-II_%s' % (target_nr), unit='10**-20 erg s-1 cm-2 A-1', format='E', array=noise_HeII[i]))
 
 	# Lya GAUSSIAN FIT:
-	mean_Lya = sum(rest_wavelen_Lya[i] * flux_Lya[i]) / len(flux_Lya[i])	 # TODO: == Ly_alpha_rest ?
-	sigma_Lya = np.sqrt(sum(flux_Lya[i] * (rest_wavelen_Lya[i] - mean_Lya) ** 2) / sum(flux_Lya[i])) # TODO: RuntimeWarning: invalid value encountered in sqrt
+	mean_Lya = sum(rest_wavelen_Lya[i] * flux_Lya[i]) / len(flux_Lya[i])	
+	sigma_Lya = np.sqrt(sum(flux_Lya[i] * (rest_wavelen_Lya[i] - mean_Lya) ** 2) / sum(flux_Lya[i]))
 	def Gauss(x, a, x0, sigma):
 		return a *(1/(sigma * (np.sqrt(2*np.pi)))) * np.exp(-(x - x0) ** 2 / (2 * sigma ** 2))
 	popt, pcov = curve_fit(Gauss, rest_wavelen_Lya[i], flux_Lya[i], p0=[max(flux_Lya[i]), mean_Lya, sigma_Lya], maxfev=1000000000)
@@ -254,7 +253,7 @@ for i in range(select_targets):
 
 	# He-II GAUSSIAN FIT:
 	mean_HeII = sum(rest_wavelen_HeII[i] * flux_HeII[i]) / len(flux_HeII[i])
-	sigma_HeII = np.sqrt(sum(flux_HeII[i] * (rest_wavelen_HeII[i] - mean_HeII) ** 2) / sum(flux_HeII[i])) # TODO: RuntimeWarning: invalid value encountered in sqrt
+	sigma_HeII = np.sqrt(sum(flux_HeII[i] * (rest_wavelen_HeII[i] - mean_HeII) ** 2) / sum(flux_HeII[i]))
 	popt, pcov = curve_fit(Gauss, rest_wavelen_HeII[i], flux_HeII[i], p0=[max(flux_HeII[i]), mean_HeII, sigma_HeII], maxfev=1000000000)
 	perr_gauss = np.sqrt(np.diag(pcov))
 	residual_HeII[i] = flux_HeII[i] - (Gauss(rest_wavelen_HeII[i], *popt))
