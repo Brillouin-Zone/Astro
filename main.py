@@ -1,30 +1,35 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib
+
 import scipy.optimize as sci
 from scipy import interpolate
 from scipy.optimize import curve_fit
 from scipy.special import erf, erfc
 from scipy.interpolate import interp1d
 from scipy.optimize import fsolve
-from decimal import Decimal
+import scipy.constants as const
+
 import astropy
 from astropy import units as u
 from astropy.io import fits
 from astropy.coordinates import SkyCoord
 from astropy.modeling import models
+from astropy.modeling import fitting
 import scipy.ndimage as snd
 from astropy.io import fits as pyfits
 from astropy.nddata import Cutout2D
 from astropy.wcs import WCS
 from astropy.coordinates import SkyCoord
+
 import statistics
 import random
-import scipy.constants as const
-
+from decimal import Decimal
+from lmfit.model import Model
+import pandas as pd
+import seaborn as sns
 import time
 from datetime import timedelta
-
 import os
 
 #niceValue = os.nice(19)	#  nice: value in [-20 important, 19 unimportant]
@@ -92,7 +97,7 @@ COLS.append(pyfits.Column(name='vacuum_wavelength', unit='Angstrom', format='E',
 
 FigNr = 0
 for i in range(0, len(RA)):		# loop through the number of target galaxies
-	if (REDSHIFT[i] >= 2) and (REDSHIFT[i] <= 5): # select galaxies according to redshift interval;
+	if (REDSHIFT[i] >= 3) and (REDSHIFT[i] <= 4): # select galaxies according to redshift interval; # TODO: change to [2, 5]
 		for q in range(len(wavelength)):
 			data_slice = data[q, :, :]  # LAYER for this wavelength
 			data_slice_err = data_err[q, :, :]  # VARIANCE
@@ -158,45 +163,51 @@ for i in range(0, len(RA)):		# loop through the number of target galaxies
 
 cols = pyfits.ColDefs(COLS)
 hdu = pyfits.BinTableHDU.from_columns(cols)
-# print(len(target_identification)) # expect: 171 == nr of targets in 3 <= z <= 4: OK
-hdu.writeto('1D_SPECTRUM_ALL_%s.fits' % (NAME), overwrite=True) # saves 171 targets with 3 <= z <= 4
+# print(len(target_identification)) # expect: 171 == nr of targets if 3 <= z <= 4: OK
+hdu.writeto('1D_SPECTRUM_ALL_%s.fits' % (NAME), overwrite=True) # saves 171 targets if 3 <= z <= 4
 
 print('finished part 1')
 
-################################  P A R T    2  : SELECTION OF TARGET GALAXIES ACCORDING TO He-II PEAK GAUSSIAN FIT ####################################
-# TODO:
-#  2) pick the ones that show a He-II peak
-#  3) (then coding (bootstrap method) to measure flux)
-#   		=> only include galaxies with potential he2-lines
-#   		=> median / significance
-#  4) then look at O-III and C-IV use paper for wavelengths
-#  5) SNR
-
+########## P A R T    2  : SELECTION OF TARGET GALAXIES ACCORDING TO He-II PEAK GAUSSIAN FIT  / Bootstrap ################
 EXTRACTIONS = '1D_SPECTRUM_ALL_%s.fits'%(NAME)
 extractions = pyfits.open(EXTRACTIONS)
 DATA = extractions[1].data
 # vac_wavelength = DATA.field('vacuum_wavelength')
-select_targets = len(target_identification) # 171 targets in 3 <= z <= 4
+select_targets = len(target_identification) # 171 targets if 3 <= z <= 4
 
 # CHOOSE GALAXIES THAT SHOW A He-II PEAK:
 rest_vac_wavelen = [[] for j in range(select_targets)] # extract the rest-frame-shifted wavelength-columns
 flux_dens_tot = [[] for j in range(select_targets)]
 flux_dens_err = [[] for j in range(select_targets)]
 REDSHIFT_select = [item for item in REDSHIFT if item <= 4 and item >= 3]  # redshift of galaxies with 3 <= z <= 4
+N = 10 # nr of bootstrap
 
 Lya_indices = [] # save for each galaxy the list-indices of the wavelengths corresponding to the Lya peak
 rest_wavelen_Lya = [[] for i in range(select_targets)]
 flux_Lya = [[] for i in range(select_targets)]
 noise_Lya = [[] for i in range(select_targets)]
 residual_Lya = [[] for i in range(select_targets)]
+bootstrap_flux_Lya = [[0 for m in range(N)] for i in range(select_targets)]
+bootstrap_err_Lya = [[0 for m in range(N)] for i in range(select_targets)]
+av_flux_estim_Lya = [[] for j in range(select_targets)]
+av_err_estim_Lya = [[] for j in range(select_targets)]
+tot_av_flux_Lya = [[] for j in range(select_targets)]
+tot_av_err_Lya = [[] for j in range(select_targets)]
 
 HeII_indices = [] # save here for each galaxy the list-indices of the wavelengths corresponding to the He-II peak
 rest_wavelen_HeII = [[] for j in range(select_targets)]
 flux_HeII = [[] for j in range(select_targets)]
 noise_HeII = [[] for j in range(select_targets)]
 residual_HeII = [[] for i in range(select_targets)]
+bootstrap_flux_HeII = [[0 for m in range(N)] for i in range(select_targets)]
+bootstrap_err_HeII = [[0 for m in range(N)] for i in range(select_targets)]
+av_flux_estim_HeII = [[] for j in range(select_targets)]
+av_err_estim_HeII = [[] for j in range(select_targets)]
+tot_av_flux_HeII = [[] for j in range(select_targets)]
+tot_av_err_HeII = [[] for j in range(select_targets)]
 
-columns = []
+columnsHe = []
+columnsLya = []
 figNr = 0
 for i in range(select_targets):
 	target_nr = str(target_identification[i])
@@ -214,11 +225,30 @@ for i in range(select_targets):
 	noise_HeII[i] = np.array(flux_dens_err[i])[HeII_indices[i]]
 	rest_wavelen_HeII[i] = np.array(rest_vac_wavelen[i])[HeII_indices[i]]
 
-	# SAVE THE HeII-PEAK INTO A FITS TABLE
-	columns.append(pyfits.Column(name='rest_wavelen_He-II_%s' % (target_nr), unit='Angstrom', format='E', array=rest_wavelen_HeII[i]))
-	columns.append(pyfits.Column(name='flux_He-II_%s' % (target_nr), unit='10**-20 erg s-1 cm-2 A-1', format='E', array=flux_HeII[i]))
-	columns.append(pyfits.Column(name='noise_He-II_%s' % (target_nr), unit='10**-20 erg s-1 cm-2 A-1', format='E', array=noise_HeII[i]))
+	# SAVE THE Lya- AND HeII-PEAK INTO A FITS TABLE
+	# I M P O R T A N T : FITS CAN ONLY HAVE MAX 999 COLUMNS !!!
+	columnsLya.append(pyfits.Column(name='rest_wavelen_Lya_%s' % (target_nr), unit='Angstrom', format='E', array=rest_wavelen_Lya[i]))
+	columnsLya.append(pyfits.Column(name='flux_Lya_%s' % (target_nr), unit='10**-20 erg s-1 cm-2 A-1', format='E', array=flux_Lya[i]))
+	columnsLya.append(pyfits.Column(name='noise_Lya_%s' % (target_nr), unit='10**-20 erg s-1 cm-2 A-1', format='E', array=noise_Lya[i]))
+	columnsHe.append(pyfits.Column(name='rest_wavelen_He-II_%s' % (target_nr), unit='Angstrom', format='E', array=rest_wavelen_HeII[i]))
+	columnsHe.append(pyfits.Column(name='flux_He-II_%s' % (target_nr), unit='10**-20 erg s-1 cm-2 A-1', format='E', array=flux_HeII[i]))
+	columnsHe.append(pyfits.Column(name='noise_He-II_%s' % (target_nr), unit='10**-20 erg s-1 cm-2 A-1', format='E', array=noise_HeII[i]))
 
+	# BOOTSTRAP EXPERIMENT:
+	for n in range(N):
+		bootstrap_flux_HeII[i] = np.random.choice(flux_HeII[i], size=len(flux_HeII[i]))
+		bootstrap_err_HeII[i] = np.random.choice(noise_HeII[i], size=len(noise_HeII[i]))
+		bootstrap_flux_Lya[i] = np.random.choice(flux_Lya[i], size=len(flux_Lya[i]))
+		bootstrap_err_Lya[i] = np.random.choice(noise_Lya[i], size=len(noise_Lya[i]))
+		av_flux_estim_HeII[i].append(np.mean(bootstrap_flux_HeII[i])) # saves average for each target for each bootstrap
+		av_err_estim_HeII[i].append(np.mean(bootstrap_err_HeII[i]))	# "
+		av_flux_estim_Lya[i].append(np.mean(bootstrap_flux_Lya[i]))	# "
+		av_err_estim_Lya[i].append(np.mean(bootstrap_err_Lya[i])) # "
+	tot_av_flux_HeII[i] = np.mean(av_flux_estim_HeII[i]) # saves average for each target
+	tot_av_err_HeII[i] = np.mean(av_err_estim_HeII[i]) # "
+	tot_av_flux_Lya[i] = np.mean(av_flux_estim_Lya[i]) # "
+	tot_av_err_Lya[i] = np.mean(av_err_estim_Lya[i]) # "
+			# above tot_av_... for SNR
 	# GAUSSIAN FIT:
 	def Gauss(x, a, x0, sigma):
 		return a *(1/(sigma * (np.sqrt(2*np.pi)))) * np.exp(-(x - x0) ** 2 / (2 * sigma ** 2))
@@ -254,17 +284,15 @@ for i in range(select_targets):
 		frame1.set_xticklabels([])
 		plt.savefig('plots/ALL_PART2_GAUSSIAN/HeII_Gauss_target_%s.pdf' % (target_nr))
 		plt.clf()
+		figNr += 1
 
-	figNr += 1
+		# Lya GAUSSIAN FIT:
+		mean_Lya = np.mean(flux_Lya[i]) # sum(rest_wavelen_Lya[i] * flux_Lya[i]) / sum(flux_Lya[i])
+		sigma_Lya = np.sqrt(sum(flux_Lya[i] * (rest_wavelen_Lya[i] - mean_Lya) ** 2) / sum(flux_Lya[i]))
+		popt, pcov = curve_fit(Gauss, rest_wavelen_Lya[i], flux_Lya[i], p0=[max(flux_Lya[i]), mean_Lya, sigma_Lya], maxfev=1000000000)
+		perr_gauss = np.sqrt(np.diag(pcov))
+		residual_Lya[i] = flux_Lya[i] - (Gauss(rest_wavelen_Lya[i], *popt))
 
-	# Lya GAUSSIAN FIT:
-	mean_Lya = np.mean(flux_Lya[i]) # sum(rest_wavelen_Lya[i] * flux_Lya[i]) / sum(flux_Lya[i])
-	sigma_Lya = np.sqrt(sum(flux_Lya[i] * (rest_wavelen_Lya[i] - mean_Lya) ** 2) / sum(flux_Lya[i]))
-	popt, pcov = curve_fit(Gauss, rest_wavelen_Lya[i], flux_Lya[i], p0=[max(flux_Lya[i]), mean_Lya, sigma_Lya], maxfev=1000000000)
-	perr_gauss = np.sqrt(np.diag(pcov))
-	residual_Lya[i] = flux_Lya[i] - (Gauss(rest_wavelen_Lya[i], *popt))
-
-	if (0 <= np.mean(flux_HeII[i])): # only look at galaxies that have a HeII peak
 		# plt.figure(figNr)
 		figure = plt.figure(figNr)
 		frame1 = figure.add_axes((0.1, 0.3, 0.8, 0.6))
@@ -285,44 +313,20 @@ for i in range(select_targets):
 		frame1.set_xticklabels([])  # Remove x-tic labels for the first frame
 		plt.savefig('plots/ALL_PART2_GAUSSIAN/Lya_Gauss_target_%s.pdf' % (target_nr))
 		plt.clf()
+		figNr += 1
 
-	figNr += 1
-
-Cols = pyfits.ColDefs(columns)
-hdu = pyfits.BinTableHDU.from_columns(Cols)
-hdu.writeto('HeII_selected_ALL_%s.fits' % (NAME), overwrite=True)
+ColsLya = pyfits.ColDefs(columnsLya)
+ColsHe = pyfits.ColDefs(columnsHe)
+hduLya = pyfits.BinTableHDU.from_columns(ColsLya)
+hduHe = pyfits.BinTableHDU.from_columns(ColsHe)
+hduLya.writeto('Lya_selected_ALL_%s.fits' % (NAME), overwrite=True)
+hduHe.writeto('HeII_selected_ALL_%s.fits' % (NAME), overwrite=True)
 print('finished part 2')
 
-################################  P A R T    3 : BOOTSTRAP EXPERIMENT   ####################################
-
-'''
-bootstrap_flux_input = random.choice(flux_HeII)	# choose the second target here, since He-II line most dominant
-bootstrap_error_input = noise_HeII[bootstrap_flux_input] # take corresponding error for the above chosen flux
-# print(statistics.mean(bootstrap_input))
-N = 1000 # nr of bootstrap
-bootstrap_flux = []
-bootstrap_error = []
-average_flux_estimate = [np.mean(bootstrap_flux_input)]
-average_error_estimate = [np.mean(bootstrap_error_input)]
-for n in range(0, N):
-	for q in range(0, len(wavelength)):
-		bootstrap_flux.append(np.random.choice(bootstrap_flux_input))
-		bootstrap_error.append(np.random.choice(bootstrap_error_input))
-	average_flux_estimate.append(np.mean(bootstrap_flux))
-	average_error_estimate.append(np.mean(bootstrap_error))
-
-bootstrap_flux = np.array(bootstrap_flux, dtype=float)
-bootstrap_error = np.array(bootstrap_error, dtype=float)
-average_flux_estimate = np.array(average_flux_estimate, dtype=float)  # NOTE: the first entry is the mean of bootstrap_input!!!
-average_error_estimate = np.array(average_error_estimate, dtype=float)  # note: the first entry is the mean of bootstrap_input!!!
-		# THIS IS THE NOISE N IN THE NEXT SECTION; SNR
-'''
-print('finished part 3')
-
-################################  P A R T    4 : SNR   ####################################
+################################  P A R T    3 : SNR   ####################################
 # SNR = S / N with S the flux and N the nose from the boostrap
 
-print('finished part 4')
+print('finished part 3')
 
 end_time = time.monotonic()
 print(timedelta(seconds=end_time - start_time))
