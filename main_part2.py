@@ -116,24 +116,7 @@ for i in range(select_targets):
 		columnsHe.append(pyfits.Column(name='flux_He-II_%s' % (target_nr), unit='10**-20 erg s-1 cm-2 A-1', format='E', array=flux_HeII[i]))
 		columnsHe.append(pyfits.Column(name='noise_He-II_%s' % (target_nr), unit='10**-20 erg s-1 cm-2 A-1', format='E', array=noise_HeII[i]))
 
-		'''
-		# BOOTSTRAP EXPERIMENT:
-		for n in range(N):
-			bootstrap_flux_HeII[i] = np.random.choice(flux_HeII[i], size=len(flux_HeII[i]))
-			bootstrap_err_HeII[i] = np.random.choice(noise_HeII[i], size=len(noise_HeII[i]))
-			bootstrap_flux_Lya[i] = np.random.choice(flux_Lya[i], size=len(flux_Lya[i]))
-			bootstrap_err_Lya[i] = np.random.choice(noise_Lya[i], size=len(noise_Lya[i]))
-			av_flux_estim_HeII[i].append(np.mean(bootstrap_flux_HeII[i])) # saves average for each target for each bootstrap
-			av_err_estim_HeII[i].append(np.mean(bootstrap_err_HeII[i]))
-			av_flux_estim_Lya[i].append(np.mean(bootstrap_flux_Lya[i]))
-			av_err_estim_Lya[i].append(np.mean(bootstrap_err_Lya[i]))
-		tot_av_flux_HeII[i] = np.mean(av_flux_estim_HeII[i]) # saves average for each target
-		tot_av_err_HeII[i] = np.mean(av_err_estim_HeII[i])
-		tot_av_flux_Lya[i] = np.mean(av_flux_estim_Lya[i])
-		tot_av_err_Lya[i] = np.mean(av_err_estim_Lya[i])
-				# above tot_av_... for SNR
-		'''
-
+		
 		# GAUSSIAN FIT:
 		def Gauss(x, amp, cen, sigma):
 			return amp *(1/(sigma * (np.sqrt(2*np.pi)))) * np.exp(-(x - cen) ** 2 / (2. * sigma ** 2))
