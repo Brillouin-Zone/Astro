@@ -35,7 +35,7 @@ from datetime import timedelta
 
 start_time = time.monotonic()
 ##########################################################################################################################
-########## P A R T   4  : CREATE FULL SPECTRUM PLOT OF TARGETS 88, 204, 435 ##############################################
+########## P A R T   4  : CREATE FULL SPECTRUM PLOT OF TARGETS 88, 204, 435, 22429 FOR PAPER #############################
 NAME = 'EXTRACTION'
 EXTRACTIONS = '1D_SPECTRUM_ALL_%s.fits'%(NAME)
 extractions = pyfits.open(EXTRACTIONS)
@@ -49,12 +49,15 @@ O_III_sf_1 = 1660.81
 flux_dens_tot_88 = DATA.field('fluxdensity_total_88')
 flux_dens_tot_204 = DATA.field('fluxdensity_total_204')
 flux_dens_tot_435 = DATA.field('fluxdensity_total_435')
+flux_dens_tot_22429 = DATA.field('fluxdensity_total_22429')
 flux_dens_err_88 = DATA.field('fluxdensity_total_ERR_88')
 flux_dens_err_204 = DATA.field('fluxdensity_total_ERR_204')
 flux_dens_err_435 = DATA.field('fluxdensity_total_ERR_435')
+flux_dens_err_22429 = DATA.field('fluxdensity_total_ERR_22429')
 rest_vac_wavelen_88 = DATA.field('rest_vac_wavelen_88')
 rest_vac_wavelen_204 = DATA.field('rest_vac_wavelen_204')
 rest_vac_wavelen_435 = DATA.field('rest_vac_wavelen_435')
+rest_vac_wavelen_22429 = DATA.field('rest_vac_wavelen_22429')
 
 figNr = 0
 figure = plt.figure(figNr, figsize=(10, 5))
@@ -75,6 +78,7 @@ plt.xlabel(r'wavelength in rest-frame $[\AA]$')
 plt.ylabel(r'total flux density $10^{-20} \frac{erg}{s\cdot cm^2 A}$')
 plt.title('Lya rest-peak of target 88 at z = 2.9541607')
 plt.savefig('MAIN_LATEX/target_88.pdf')
+plt.savefig('plots/ALL_PART4/target_88.pdf')
 plt.clf()
 figNr += 1
 
@@ -96,6 +100,7 @@ plt.xlabel(r'wavelength in rest-frame $[\AA]$')
 plt.ylabel(r'total flux density $10^{-20} \frac{erg}{s\cdot cm^2 A}$')
 plt.title('Lya rest-peak of target 204 at z = 3.1357558')
 plt.savefig('MAIN_LATEX/target_204.pdf')
+plt.savefig('plots/ALL_PART4/target_204.pdf')
 plt.clf()
 figNr += 1
 
@@ -116,5 +121,33 @@ plt.xlabel(r'wavelength in rest-frame $[\AA]$')
 plt.ylabel(r'total flux density $10^{-20} \frac{erg}{s\cdot cm^2 A}$')
 plt.title('Lya rest-peak of target 435 at z = 3.7247474')
 plt.savefig('MAIN_LATEX/target_435.pdf')
+plt.savefig('plots/ALL_PART4/target_435.pdf')
 plt.clf()
 figNr += 1
+
+figure = plt.figure(figNr, figsize=(10, 5))
+plt.step(rest_vac_wavelen_22429, flux_dens_tot_22429, 'b', label='flux', linewidth=0.3)
+plt.step(rest_vac_wavelen_22429, flux_dens_err_22429, 'k', label='noise', linewidth=0.3)
+plt.axvline(x=Ly_alpha_rest, color='c', linewidth=0.7)
+plt.axvline(x=HeII, color='c', linewidth=0.7)
+plt.axvline(x=C_IV, color='c', linewidth=0.7)
+plt.axvline(x=O_III_sf_1, color='c', linewidth=0.7)
+plt.text(1225, 20, r'$Ly\alpha$')
+plt.text(1644, 15, r'$He-II$')
+plt.text(1684, 20, r'$O-III$')
+plt.text(1557, 20, r'$C-IV$')
+plt.grid(True)
+plt.legend(loc='best')
+plt.xlabel(r'wavelength in rest-frame $[\AA]$')
+plt.ylabel(r'total flux density $10^{-20} \frac{erg}{s\cdot cm^2 A}$')
+plt.title('Lya rest-peak of target 22429 at z = 2.9297342')
+plt.savefig('MAIN_LATEX/target_22429.pdf')
+plt.savefig('plots/ALL_PART4/target_22429.pdf')
+plt.clf()
+figNr += 1
+
+# END
+########################
+print('finished part 4')
+end_time = time.monotonic()
+print(timedelta(seconds=end_time - start_time))
