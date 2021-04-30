@@ -53,6 +53,7 @@ C_IV = 1548.19
 O_III_sf_1 = 1660.81
 O_III_sf_2 = 1666.15
 O_III_f = 2321.66
+SiIII_sf_1 = 1882.71
 
 # READ IN A FITS CATALOG and extract data:
 CAT = 'MXDF_BETA_CATALOG.fits' # 724 targets
@@ -172,3 +173,5 @@ hdu = pyfits.BinTableHDU.from_columns(cols)
 hdu.writeto('1D_SPECTRUM_ALL_%s.fits' % (NAME), overwrite=True)
 
 print('finished part 1')
+end_time = time.monotonic()
+print(timedelta(seconds=end_time - start_time))
