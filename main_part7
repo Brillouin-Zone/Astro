@@ -1,0 +1,145 @@
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib
+
+import scipy.optimize as sci
+from scipy import interpolate, integrate
+from scipy.integrate import simps
+from scipy.optimize import curve_fit
+from scipy.special import erf, erfc
+from scipy.interpolate import interp1d
+from scipy.optimize import fsolve
+import scipy.constants as const
+
+import astropy
+from astropy import units as u
+from astropy.io import fits
+from astropy.coordinates import SkyCoord
+from astropy.modeling import models
+from astropy.modeling import fitting
+import scipy.ndimage as snd
+from astropy.io import fits as pyfits
+from astropy.nddata import Cutout2D
+from astropy.wcs import WCS
+from astropy.coordinates import SkyCoord
+
+import statistics
+import random
+from decimal import Decimal
+import lmfit
+from lmfit.model import Model, ModelResult
+from lmfit import Parameters, minimize, fit_report, Minimizer, report_fit
+import time
+from datetime import timedelta
+
+start_time = time.monotonic()
+######################################################################################################################
+# create a mixed model of Pop. II and Pop. III stars based on BPASS to explain the calculated integrated fluxes of
+#       the He II emission lines in the sample
+#           0   1    2     3     4     5     6     7   8     9   10   11
+# targets: 88, 204, 435, 22429, 538, 5199, 23124, 48, 118, 131, 7876, 218
+iden = [88, 204, 435, 22429, 538, 5199, 23124, 48, 118, 131, 7876, 218]
+iden_str = ['88', '204', '435', '22429', '538', '5199', '23124', '48', '118', '131', '7876', '218']
+z = [2.9541607, 3.1357558, 3.7247474, 2.9297342, 4.1764603, 3.063, 3.59353921008408,
+            2.9101489, 3.0024831, 3.0191996, 2.993115, 2.865628]
+HeII = 1640.42
+
+NAME = 'EXTRACTION'
+Model_II_III = 'models_for_Cheryl.fits'
+extractions_II_III = pyfits.open(Model_II_III)
+data_II_III = extractions_II_III[1].data
+wavelength = data_II_III.field('lambda')
+lum_Pop_II = data_II_III.field('lum_PopII')
+lum_Pop_III = data_II_III.field('lum_PopIII')
+
+######################################################################################################################
+# EXTRACT THE PART LAMBDA IN [0, 228] A
+index_228 = np.where(wavelength > 228)
+wavelength_228 = wavelength[0:int(index_228[0][0])]
+lum_Pop_III_228 = lum_Pop_III[0:int(index_228[0][0])]
+lum_Pop_II_228 = lum_Pop_II[0:int(index_228[0][0])]
+L_solar = 3.826*10**33  # solar luminosity in erg / s
+
+f_1640_0004 = 6.79 * 10 ** 38  # from table 4 in Schaerer for Z = 0.0004 (first case). NOTE: use here Z = 0.0001 TODO
+
+######################################################################################################################
+# GENERATE THE MODELS THAT ARE SHOWN IN THE 2 FIGURES, L_{tot} = f * L_{III} + (1-f) L_{II} WITH
+# a) f in {0.1, 0.2,...,0.9}
+f0 = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+L_solar_0 = [0, 0, 0, 0, 0, 0, 0, 0, 0]  # luminosity per wavelength in units of solar-luminosity
+L_0 = [0, 0, 0, 0, 0, 0, 0, 0, 0]  # luminosity per wavelength in erg/s/A
+for n in range(len(f0)):
+    L_solar_0[n] = f0[n] * lum_Pop_III_228 + (1-f0[n]) * lum_Pop_II_228
+    L_0[n] = L_solar_0[n] * L_solar
+
+# b) f in {0.01, 0.02,...,0.09}
+f00 = [0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09]
+L_solar_00 = [0, 0, 0, 0, 0, 0, 0, 0, 0]
+L_00 = [0, 0, 0, 0, 0, 0, 0, 0, 0]
+for m in range(len(f00)):
+    L_solar_00[m] = f00[m] * lum_Pop_III_228 + (1-f00[m]) * lum_Pop_II_228  # in units of solar luminosity
+    L_00[m] = L_solar_00[m] * L_solar
+
+######################################################################################################################
+# DETERMINE THE INTEGRAL OF THE ENERGY SPECTRUM Q_ion
+photon_energy = 1.986 * 10**-8 / wavelength_228  # array
+
+f_lambda_0 = L_0  # type? TODO
+f_energy_0 = f_lambda_0 / photon_energy  # array
+Q_ion_0 = simps(f_energy_0, wavelength_228)
+print('Q_ion for models 0.x are: ', Q_ion_0)
+
+f_lambda_00 = L_00  # type? TODO
+f_energy_00 = f_lambda_00 / photon_energy  # array
+Q_ion_00 = simps(f_energy_00, wavelength_228)
+print('Q_ion for models 0.0x are: ', Q_ion_00)
+
+######################################################################################################################
+# DETERMINE THE HE II LINE LUMINOSITY
+L_HeII_0 = Q_ion_0 * 6.4 * 10**-12
+print('Luminosity L_HeII for models 0.x are: ', L_HeII_0)
+L_HeII_00 = Q_ion_00 * 6.4 * 10**-12
+print('Luminosity L_HeII for models 0.0x are: ', L_HeII_00)
+
+######################################################################################################################
+# CALCULATE THE HE II EQUIVALENT WIDTH BY ESTIMATING THE AVERAGE CONTINUUM LUMINOSITY FROM THE MODEL AROUND 1640A
+# DETERMINE THE RATIO
+wavelength_1550 = wavelength[wavelength >= 1550]
+wavelength_1550_1750 = wavelength_1550[wavelength_1550 <= 1750]  # the wavelength-array around the He II 1640 peak
+index_1550_1750 = np.argwhere((wavelength >= 1550) & (wavelength <= 1750))  # indices of elements in 1550-1750 A
+
+L_0_1550_1750 = [[] for n in range(len(f0))]  # luminosity array for wavelengths 1550 to 1750 A for the model f = 0.x
+L_00_1550_1750 = [[] for n in range(len(f00))]  # luminosity array for wavelengths 1550 to 1750 A for the model f = 0.0x
+
+for t in range(len(f0)):
+    L_0_1550_1750[t] = (f0[t] * lum_Pop_III[index_1550_1750] + (1-f0[t]) * lum_Pop_II[index_1550_1750]) * L_solar
+    L_00_1550_1750[t] = (f00[t] * lum_Pop_III[index_1550_1750] + (1-f00[t]) * lum_Pop_II[index_1550_1750]) * L_solar
+    # NOTE: both have structure [array([[x], [x], ...[x]]), _____ array([[x], [x], ...[x]])]
+    # with                         A  ( 1     2      21  ), _____  I   (  1    2       21)
+    # i.e. 9 arrays each with 21 1x1-arrays
+    
+    
+
+# determine now a fit function for the continuum for each of these 18 models
+
+
+# END
+########################
+print('finished part 3')
+end_time = time.monotonic()
+print(timedelta(seconds=end_time - start_time))
+
+
+
+# RESULTS:
+'''
+Q_ion for models 0.x are:  [1.53480178e+50 2.90633395e+50 4.27786612e+50 5.64939829e+50
+                            7.02093046e+50 8.39246263e+50 9.76399480e+50 1.11355270e+51 1.25070591e+51]
+Q_ion for models 0.0x are:  [3.00422830e+49 4.37576047e+49 5.74729264e+49 7.11882481e+49
+                             8.49035698e+49 9.86188915e+49 1.12334213e+50 1.26049535e+50 1.39764857e+50]
+Luminosity L_HeII for models 0.x are:  [9.82273141e+38 1.86005373e+39 2.73783432e+39 3.61561491e+39
+                                         4.49339549e+39 5.37117608e+39 6.24895667e+39 7.12673726e+39 8.00451785e+39]
+Luminosity L_HeII for models 0.0x are:  [1.92270611e+38 2.80048670e+38 3.67826729e+38 4.55604788e+38
+                                        5.43382847e+38 6.31160906e+38 7.18938964e+38 8.06717023e+38 8.94495082e+38]
+ 
+'''
