@@ -40,8 +40,8 @@ start_time = time.monotonic()
 # targets: 88, 204, 435, 22429, 538, 5199, 23124, 48, 118, 131, 7876, 218
 iden = [88, 204, 435, 22429, 538, 5199, 23124, 48, 118, 131, 7876, 218]
 iden_str = ['88', '204', '435', '22429', '538', '5199', '23124', '48', '118', '131', '7876', '218']
-z = [2.9541607, 3.1357558, 3.7247474, 2.9297342, 4.1764603, 3.063, 3.59353921008408,
-            2.9101489, 3.0024831, 3.0191996, 2.993115, 2.865628]
+z = [2.9541607, 3.1357558, 3.7247474, 2.9297342, 4.1764603, 3.063, 3.59353921008408, 2.9101489, 3.0024831, 3.0191996,
+     2.993115, 2.865628]
 HeII = 1640.42
 
 NAME = 'EXTRACTION'
@@ -49,8 +49,8 @@ Model_II_III = 'models_for_Cheryl.fits'
 extractions_II_III = pyfits.open(Model_II_III)
 data_II_III = extractions_II_III[1].data
 wavelength = data_II_III.field('lambda')
-lum_Pop_II = data_II_III.field('lum_PopII')
-lum_Pop_III = data_II_III.field('lum_PopIII')
+lum_Pop_II = data_II_III.field('lum_PopII')  # luminosity density
+lum_Pop_III = data_II_III.field('lum_PopIII')  # luminosity density
 
 ######################################################################################################################
 # EXTRACT THE PART LAMBDA IN [0, 228] A
@@ -60,7 +60,7 @@ lum_Pop_III_228 = lum_Pop_III[0:int(index_228[0][0])]
 lum_Pop_II_228 = lum_Pop_II[0:int(index_228[0][0])]
 L_solar = 3.826*10**33  # solar luminosity in erg / s
 
-f_1640_0004 = 6.79 * 10 ** 38  # from table 4 in Schaerer for Z = 0.0004 (first case). NOTE: use here Z = 0.0001 TODO
+f_1640_0004 = 6.79 * 10 ** 38  # from table 4 in Schaerer for Z = 0.0004 (first case). NOTE: use here Z = 0.0001
 
 ######################################################################################################################
 # GENERATE THE MODELS THAT ARE SHOWN IN THE 2 FIGURES, L_{tot} = f * L_{III} + (1-f) L_{II} WITH
@@ -73,9 +73,9 @@ for n in range(len(f0)):
     L_0[n] = L_solar_0[n] * L_solar
 
 # b) f in {0.01, 0.02,...,0.09}
-f00 = [0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09]
-L_solar_00 = [0, 0, 0, 0, 0, 0, 0, 0, 0]
-L_00 = [0, 0, 0, 0, 0, 0, 0, 0, 0]
+f00 = [0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.095, 0.099]
+L_solar_00 = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+L_00 = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 for m in range(len(f00)):
     L_solar_00[m] = f00[m] * lum_Pop_III_228 + (1-f00[m]) * lum_Pop_II_228  # in units of solar luminosity
     L_00[m] = L_solar_00[m] * L_solar
@@ -84,22 +84,25 @@ for m in range(len(f00)):
 # DETERMINE THE INTEGRAL OF THE ENERGY SPECTRUM Q_ion
 photon_energy = 1.986 * 10**-8 / wavelength_228  # array
 
-f_lambda_0 = L_0  # type? TODO
+f_lambda_0 = L_0
 f_energy_0 = f_lambda_0 / photon_energy  # array
 Q_ion_0 = simps(f_energy_0, wavelength_228)
 print('Q_ion for models 0.x are: ', Q_ion_0)
 
-f_lambda_00 = L_00  # type? TODO
+f_lambda_00 = L_00
 f_energy_00 = f_lambda_00 / photon_energy  # array
 Q_ion_00 = simps(f_energy_00, wavelength_228)
 print('Q_ion for models 0.0x are: ', Q_ion_00)
+print('##############################################################################################################')
 
 ######################################################################################################################
 # DETERMINE THE HE II LINE LUMINOSITY
 L_HeII_0 = Q_ion_0 * 6.4 * 10**-12
 print('Luminosity L_HeII for models 0.x are: ', L_HeII_0)
+
 L_HeII_00 = Q_ion_00 * 6.4 * 10**-12
 print('Luminosity L_HeII for models 0.0x are: ', L_HeII_00)
+print('##############################################################################################################')
 
 ######################################################################################################################
 # CALCULATE THE HE II EQUIVALENT WIDTH BY ESTIMATING THE AVERAGE CONTINUUM LUMINOSITY FROM THE MODEL AROUND 1640A
@@ -107,39 +110,108 @@ print('Luminosity L_HeII for models 0.0x are: ', L_HeII_00)
 wavelength_1550 = wavelength[wavelength >= 1550]
 wavelength_1550_1750 = wavelength_1550[wavelength_1550 <= 1750]  # the wavelength-array around the He II 1640 peak
 index_1550_1750 = np.argwhere((wavelength >= 1550) & (wavelength <= 1750))  # indices of elements in 1550-1750 A
+index_1550_1750 = np.arange(188, 209)
 
 L_0_1550_1750 = [[] for n in range(len(f0))]  # luminosity array for wavelengths 1550 to 1750 A for the model f = 0.x
 L_00_1550_1750 = [[] for n in range(len(f00))]  # luminosity array for wavelengths 1550 to 1750 A for the model f = 0.0x
+L_0_1550_1750_del = [[] for n in range(len(f0))]  # for the continuum fit
+L_00_1550_1750_del = [[] for n in range(len(f00))]  # for the continuum fit
+
+# ignore the peak at 1640 for the continuum fit: i.e. ignore positions {8, 9 for f0} and {8, 9 for f00}
+index_1550_1750_del = np.delete(index_1550_1750, (8, 9))
+wavelength_1550_1750_del = wavelength[index_1550_1750_del]
+lum_Pop_III_1550_1750_del = lum_Pop_III[index_1550_1750_del]
+lum_Pop_II_1550_1750_del = lum_Pop_II[index_1550_1750_del]
 
 for t in range(len(f0)):
     L_0_1550_1750[t] = (f0[t] * lum_Pop_III[index_1550_1750] + (1-f0[t]) * lum_Pop_II[index_1550_1750]) * L_solar
-    L_00_1550_1750[t] = (f00[t] * lum_Pop_III[index_1550_1750] + (1-f00[t]) * lum_Pop_II[index_1550_1750]) * L_solar
-    # NOTE: both have structure [array([[x], [x], ...[x]]), _____ array([[x], [x], ...[x]])]
-    # with                         A  ( 1     2      21  ), _____  I   (  1    2       21)
-    # i.e. 9 arrays each with 21 1x1-arrays
-    
-    
+    # structure: [array([....], array([...], ___,  array([...], array([...])] with 9 arrays :
+    L_0_1550_1750_del[t] = (f0[t] * lum_Pop_III_1550_1750_del + (1 - f0[t]) * lum_Pop_II_1550_1750_del) * L_solar
 
-# determine now a fit function for the continuum for each of these 18 models
+for t in range(len(f00)):
+    L_00_1550_1750[t] = (f00[t] * lum_Pop_III[index_1550_1750] + (1 - f00[t]) * lum_Pop_II[index_1550_1750]) * L_solar
+    # structure: [array([....], array([...], ___,  array([...], array([...])] with 9 arrays
+    L_00_1550_1750_del[t] = (f00[t] * lum_Pop_III_1550_1750_del + (1 - f00[t]) * lum_Pop_II_1550_1750_del) * L_solar
 
+# determine interpolation for the continuum for each of these models
+interpolated_fn_0 = interp1d(wavelength_1550_1750_del, L_0_1550_1750_del)
+interpolated_fn_00 = interp1d(wavelength_1550_1750_del, L_00_1550_1750_del)
+HeII_cont_0 = interpolated_fn_0(1640)
+HeII_cont_00 = interpolated_fn_00(1640)
+print('He II continuum level for models 0.x are: ', HeII_cont_0)
+print('He II continuum level for models 0.0x are: ', HeII_cont_00)
 
+EW_0_1550_1750_del = [0, 0, 0, 0, 0, 0, 0, 0, 0]
+EW_00_1550_1750_del = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+for j in range(len(f0)):
+    EW_0_1550_1750_del[j] = np.nanmedian(L_0_1550_1750_del[j]) / HeII_cont_0[j]
+for j in range(len(f00)):
+    EW_00_1550_1750_del[j] = np.nanmedian(L_00_1550_1750_del[j]) / HeII_cont_00[j]
+print('Equivalent width of He II for models 0.x are: ', EW_0_1550_1750_del)
+print('Equivalent width of He II for models 0.0x are: ', EW_00_1550_1750_del)
+
+######################################################################################################################
+# create a plot with He-II EW as a function of the PopIII-fraction f
+fraction = np.concatenate([f00, f0])
+EW = np.concatenate([EW_00_1550_1750_del, EW_0_1550_1750_del])
+
+figure = plt.figure(figsize=(9.5, 5))
+# plt.plot(fraction, EW, 'b+')
+plt.loglog(f0, EW_0_1550_1750_del, 'g+', label='f = 0.x')
+plt.loglog(f00, EW_00_1550_1750_del, 'b+', label='f = 0.0x')
+plt.grid(True)
+plt.legend(loc='best')
+plt.xlabel(r'Pop. III fraction f')
+plt.ylabel(r'He II equivalent width')
+# plt.savefig('plots/ALL_PART7/fraction_EW.pdf')
+plt.savefig('MAIN_LATEX/PLOTS/loglog_fraction_EW.pdf')
+
+figure = plt.figure()
+# plt.plot(fraction, EW, 'b+')
+plt.plot(f0, EW_0_1550_1750_del, 'g+', label='f = 0.x')
+plt.plot(f00, EW_00_1550_1750_del, 'b+', label='f = 0.0x')
+plt.grid(True)
+plt.legend(loc='best')
+plt.xlabel(r'Pop. III fraction f')
+plt.ylabel(r'He II equivalent width')
+# plt.savefig('plots/ALL_PART7/fraction_EW.pdf')
+plt.savefig('MAIN_LATEX/PLOTS/fraction_EW.pdf')
+
+######################################################################################################################
 # END
 ########################
 print('finished part 3')
 end_time = time.monotonic()
 print(timedelta(seconds=end_time - start_time))
 
-
-
+######################################################################################################################
 # RESULTS:
 '''
 Q_ion for models 0.x are:  [1.53480178e+50 2.90633395e+50 4.27786612e+50 5.64939829e+50
                             7.02093046e+50 8.39246263e+50 9.76399480e+50 1.11355270e+51 1.25070591e+51]
 Q_ion for models 0.0x are:  [3.00422830e+49 4.37576047e+49 5.74729264e+49 7.11882481e+49
-                             8.49035698e+49 9.86188915e+49 1.12334213e+50 1.26049535e+50 1.39764857e+50]
+                            8.49035698e+49 9.86188915e+49 1.12334213e+50 1.26049535e+50
+                            1.39764857e+50 1.46622517e+50 1.52108646e+50]
+##############################################################################################################
 Luminosity L_HeII for models 0.x are:  [9.82273141e+38 1.86005373e+39 2.73783432e+39 3.61561491e+39
-                                         4.49339549e+39 5.37117608e+39 6.24895667e+39 7.12673726e+39 8.00451785e+39]
+                                        4.49339549e+39 5.37117608e+39 6.24895667e+39 7.12673726e+39
+                                        8.00451785e+39]
 Luminosity L_HeII for models 0.0x are:  [1.92270611e+38 2.80048670e+38 3.67826729e+38 4.55604788e+38
-                                        5.43382847e+38 6.31160906e+38 7.18938964e+38 8.06717023e+38 8.94495082e+38]
- 
+                                        5.43382847e+38 6.31160906e+38 7.18938964e+38 8.06717023e+38
+                                        8.94495082e+38 9.38384111e+38 9.73495335e+38]
+##############################################################################################################
+He II continuum level for models 0.x are:  [8.86182123e+38 8.39717443e+38 7.93252763e+38 7.46788082e+38
+                                            7.00323402e+38 6.53858722e+38 6.07394042e+38 5.60929362e+38
+                                            5.14464682e+38]
+He II continuum level for models 0.0x are:  [9.28000335e+38 9.23353867e+38 9.18707399e+38 9.14060931e+38
+                                            9.09414463e+38 9.04767995e+38 9.00121527e+38 8.95475059e+38
+                                            8.90828591e+38 8.88505357e+38 8.86646770e+38]
+ ##############################################################################################################
+Equivalent width of He II for models 0.x are:  [0.9533439009158959, 0.9531368295340301, 0.9529054997922108, 
+                                                0.9526453836711942, 0.9523507514614035, 0.9520142447887578, 
+                                                0.9516262536634251, 0.9511739839149332, 0.950640019270965]
+Equivalent width of He II for models 0.0x are:  [0.9535125358831656, 0.9534945529746227, 0.9534763881648357, 
+                                                0.953458038679816, 0.9534395016888816, 0.9534207743032029, 
+                                                0.9534018535743017, 0.9533827364925017, 0.9533634199853356, 
+                                                0.9533536859695199, 0.9533458620289027]
 '''
