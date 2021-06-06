@@ -101,7 +101,7 @@ COLS.append(pyfits.Column(name='vacuum_wavelength', unit='Angstrom', format='E',
 min_wavelength = 4700 # wavelength interval: 4700-9350 A
 max_wavelength = 9350 # corresponding redshift interval:
 z_min = 2.86 # 	for Lya: ~ 2.86 - 6.7  		 for HeII: ~ 1.86- 4.7
-z_max = 4.7 #	combined interval: 2.86 - 4.7
+z_max = 4.7 #	combined interval: 2.86 - 4.7	contains 318 targets
 FigNr = 0
 for i in range(0, len(RA)): # TODO: potential targets: 204, 435, 88
 	if (REDSHIFT[i] >= z_min) and (REDSHIFT[i] <= z_max):
@@ -133,7 +133,7 @@ for i in range(0, len(RA)): # TODO: potential targets: 204, 435, 88
 		COLS.append(pyfits.Column(name='fluxdensity_total_ERR_%s' % (target_nr), unit='10**-20 erg s-1 cm-2 A-1', format='E', array=noise_pipe[i]))
 
 		# ∀ GALAXIES, MAKE AN INDIVIDUAL SPECTRAL PLOT, zoom in to the Lya interval:
-
+		'''
 		# Lyman-alpha subplot at ~121.5nm
 		plt.figure(FigNr)
 		plt.step(rest_wavelength[i], flux_A[i], 'b', label='flux')
@@ -165,12 +165,12 @@ for i in range(0, len(RA)): # TODO: potential targets: 204, 435, 88
 		plt.savefig('plots/ALL_PART1/HeII_rest_spectrum_target_%s.pdf' % (target_nr))
 		plt.clf()
 		FigNr += 1
-
+		'''
 COLS.append(pyfits.Column(name='z', format='E', array=redshift))
 COLS.append(pyfits.Column(name='iden', format='E', array=target_identification))
 cols = pyfits.ColDefs(COLS)
 hdu = pyfits.BinTableHDU.from_columns(cols)
-hdu.writeto('1D_SPECTRUM_ALL_%s.fits' % (NAME), overwrite=True)
+hdu.writeto('1D_SPECTRUM_ALL_%s.fits' % (NAME), overwrite=True) # (318 targets)
 
 print('finished part 1')
 end_time = time.monotonic()
