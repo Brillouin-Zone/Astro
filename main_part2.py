@@ -124,7 +124,7 @@ for i in range(select_targets):
 	noise_HeII[i] = np.array(flux_dens_err[i])[HeII_indices[i]]
 	rest_wavelen_HeII[i] = np.array(rest_vac_wavelen[i])[HeII_indices[i]]
 
-	CIII_sf_indices.append(np.where((rest_vac_wavelen[i] > 1902) & (rest_vac_wavelen[i] < 1916))) # TODO
+	CIII_sf_indices.append(np.where((rest_vac_wavelen[i] > 1902) & (rest_vac_wavelen[i] < 1916)))
 	flux_CIII_sf[i] = np.array(flux_dens_tot[i])[CIII_sf_indices[i]]
 	noise_CIII_sf[i] = np.array(flux_dens_err[i])[CIII_sf_indices[i]]
 	rest_wavelen_CIII_sf[i] = np.array(rest_vac_wavelen[i])[CIII_sf_indices[i]]
